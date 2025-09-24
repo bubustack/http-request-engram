@@ -1,0 +1,49 @@
+---
+apiVersion: catalog.bubu.sh/v1alpha1
+kind: EngramTemplate
+metadata:
+  name: http-request
+spec:
+  version: "0.1.0"
+  description: "Makes an HTTP request to a specified URL."
+  supportedModes:
+    - job
+  image: "http-request:latest"
+  inputSchema:
+    type: object
+    properties:
+      url:
+        type: string
+        description: "The URL to send the request to."
+      method:
+        type: string
+        description: "The HTTP method to use (GET, POST, etc.)."
+        default: "GET"
+      headers:
+        type: object
+        description: "A map of HTTP headers to send with the request."
+        additionalProperties:
+          type: string
+      body:
+        type: string
+        description: "The request body (for POST, PUT, etc.)."
+    required:
+      - url
+  outputSchema:
+    type: object
+    properties:
+      statusCode:
+        type: integer
+        description: "The HTTP status code of the response."
+      status:
+        type: string
+        description: "The HTTP status text of the response."
+      headers:
+        type: object
+        description: "A map of the response headers."
+      body:
+        type: string
+        description: "The response body."
+  execution:
+    job:
+      recommendedRestartPolicy: "Never"
