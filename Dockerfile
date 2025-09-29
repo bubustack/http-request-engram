@@ -10,13 +10,19 @@ WORKDIR /src
 # This ensures that the local 'replace' directives in go.mod work correctly.
 COPY . .
 
+RUN go mod download
+
 # Build the binary from within the engram's directory.
 # The Go toolchain will find the parent go.mod and handle the local SDK dependency.
-RUN cd engrams/http-request && CGO_ENABLED=0 GOOS=linux go build -o /http-request .
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o http-request main.go
 
 # --- Final Stage ---
 FROM gcr.io/distroless/static-debian12
 
-COPY --from=builder /http-request /http-request
+COPY --from=builder /src/http-request /http-request
+
+# Set the default execution mode to "batch".
+# This can be overridden at runtime by setting the environment variable.
+ENV BUBU_EXECUTION_MODE="batch"
 
 ENTRYPOINT ["/http-request"]

@@ -8,7 +8,161 @@ spec:
   description: "Makes an HTTP request to a specified URL."
   supportedModes:
     - job
+    - deployment
+    - statefulset
   image: "http-request:latest"
+  configSchema:
+    type: object
+    properties:
+      defaultURL:
+        type: string
+        description: "The default URL to use if 'url' is not provided in the input."
+      defaultMethod:
+        type: string
+        description: "The default HTTP method to use if 'method' is not provided in the input."
+      defaultHeaders:
+        type: object
+        description: "Default HTTP headers. Input headers will be merged on top of these."
+        additionalProperties:
+          type: string
+      auth:
+        type: object
+        description: "Authentication configuration for the engram instance."
+        properties:
+          type:
+            type: string
+            enum: ["bearer", "basic", "customHeader"]
+            description: "The authentication type."
+          headerName:
+            type: string
+            description: "The name of the header for 'customHeader' auth."
+      proxy:
+        type: string
+        description: "The URL of the HTTP proxy to use for requests (e.g., 'http://user:pass@host:port')."
+      batching:
+        type: object
+        description: "Configuration for batching requests in streaming mode. This has no effect in job mode."
+        properties:
+          itemsPerBatch:
+            type: integer
+            default: 50
+            description: "The maximum number of requests to send concurrently in a single batch."
+          batchInterval:
+            type: string
+            default: "1s"
+            description: "The time to wait after one batch completes before starting the next (e.g., '500ms', '2s')."
+      pagination:
+        type: object
+        description: "Configuration for paginating API results in job mode. Fetches all pages and combines results."
+        properties:
+          mode:
+            type: string
+            enum: ["off", "nextUrl", "updateParam"]
+            default: "off"
+            description: "The pagination mode to use. Has no effect in streaming mode."
+          resultsPath:
+            type: string
+            description: "JSONPath to the array of results in the response body (e.g., '$.data[*]'). If empty, the entire body is treated as the result."
+          maxPages:
+            type: integer
+            default: 100
+            description: "A safeguard limit for the maximum number of pages to fetch."
+          nextURLPath:
+            type: string
+            description: "For 'nextUrl' mode: JSONPath to the URL for the next page in the response body (e.g., '$.links.next')."
+          updateParam:
+            type: object
+            description: "For 'updateParam' mode: Configuration for the parameter to update on each request."
+            properties:
+              name:
+                type: string
+                description: "The name of the query parameter to update for each page (e.g., 'page', 'offset')."
+              type:
+                type: string
+                enum: ["page", "offset", "cursor"]
+                description: "The type of the parameter to update."
+              initialValue:
+                type: string
+                default: "1"
+                description: "The initial value for the parameter (use a string to accommodate cursors)."
+              increment:
+                type: integer
+                default: 1
+                description: "The value to increment for 'page' or 'offset' types."
+              cursorPath:
+                type: string
+                description: "For 'cursor' type: JSONPath to the value for the next cursor in the response body."
+      queryParams:
+        type: object
+        description: "Configuration for how query parameters are formatted."
+        properties:
+          arrayFormat:
+            type: string
+            enum: ["noBrackets", "brackets", "indices"]
+            default: "noBrackets"
+            description: "Controls the format for arrays in query parameters: noBrackets (foo=v1&foo=v2), brackets (foo[]=v1&foo[]=v2), or indices (foo[0]=v1&foo[1]=v2)."
+      response:
+        type: object
+        description: "Configuration for handling the HTTP response."
+        properties:
+          includeHeaders:
+            type: boolean
+            default: true
+            description: "If true, includes response headers in the output."
+          includeStatus:
+            type: boolean
+            default: true
+            description: "If true, includes the status code and text in the output."
+          format:
+            type: string
+            enum: ["auto", "json", "text", "file"]
+            default: "auto"
+            description: "The format for the response body."
+          outputFieldName:
+            type: string
+            default: "body"
+            description: "The field name to use for the output when format is 'text' or 'file'."
+      neverError:
+        type: boolean
+        default: false
+        description: "If true, the engram will succeed even on non-2xx HTTP status codes."
+      timeout:
+        type: string
+        default: "10s"
+        description: "Timeout for the HTTP request (e.g., '10s', '1m')."
+      redirects:
+        type: object
+        description: "Configuration for handling HTTP redirects."
+        properties:
+          follow:
+            type: boolean
+            default: true
+            description: "If true, the client will follow redirects."
+          maxRedirects:
+            type: integer
+            default: 10
+            description: "The maximum number of redirects to follow."
+      ignoreSSLIssues:
+        type: boolean
+        default: false
+        description: "If true, SSL certificate validation will be skipped."
+  secretSchema:
+    bearerToken:
+      description: "Secret containing the bearer token. Must have a 'bearer_token' key."
+      expectedKeys: ["bearer_token"]
+      required: false
+    basicAuth:
+      description: "Secret for basic auth. Must have 'basic_username' and 'basic_password' keys."
+      expectedKeys: ["basic_username", "basic_password"]
+      required: false
+    customHeader:
+      description: "Secret for a custom header. Must have a 'custom_header_value' key."
+      expectedKeys: ["custom_header_value"]
+      required: false
+    proxyAuth:
+      description: "Secret for proxy authentication. Must have 'proxy_username' and 'proxy_password' keys."
+      expectedKeys: ["proxy_username", "proxy_password"]
+      required: false
   inputSchema:
     type: object
     properties:
@@ -47,3 +201,5 @@ spec:
   execution:
     job:
       recommendedRestartPolicy: "Never"
+    deployment: {}
+    statefulset: {}
