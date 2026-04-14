@@ -2,13 +2,20 @@ package main
 
 import (
 	"context"
-	"http-request/pkg/engram"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	sdk "github.com/bubustack/bubu-sdk-go"
+	"github.com/bubustack/http-request-engram/pkg/engram"
 )
 
 func main() {
-	if err := sdk.Start(context.Background(), engram.New()); err != nil {
-		panic(err)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	if err := sdk.Start(ctx, engram.New()); err != nil {
+		log.Fatalf("http-request engram failed: %v", err)
 	}
 }
