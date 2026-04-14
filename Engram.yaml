@@ -1,16 +1,17 @@
----
-apiVersion: catalog.bubu.sh/v1alpha1
+apiVersion: catalog.bubustack.io/v1alpha1
 kind: EngramTemplate
 metadata:
   name: http-request
+  annotations:
+    registry.bubustack.io/maturity: experimental
 spec:
-  version: "0.1.0"
+  version: 0.1.0
   description: "Makes an HTTP request to a specified URL."
   supportedModes:
     - job
     - deployment
     - statefulset
-  image: "http-request:latest"
+  image: ghcr.io/bubustack/http-request-engram:0.1.0
   configSchema:
     type: object
     properties:
@@ -69,7 +70,7 @@ spec:
             description: "A safeguard limit for the maximum number of pages to fetch."
           nextURLPath:
             type: string
-            description: "For 'nextUrl' mode: JSONPath to the URL for the next page in the response body (e.g., '$.links.next')."
+            description: "For 'nextUrl' mode: JSONPath to the URL for the next page in the response body (e.g., '$.links.next'). Resolved URLs must remain on the same origin (scheme + host) as the current page URL."
           updateParam:
             type: object
             description: "For 'updateParam' mode: Configuration for the parameter to update on each request."
@@ -117,7 +118,7 @@ spec:
             type: string
             enum: ["auto", "json", "text", "file"]
             default: "auto"
-            description: "The format for the response body."
+            description: "The format for the response body. 'file' returns an object with base64 data (`encoding`, `data`, `sizeBytes`, optional `contentType`)."
           outputFieldName:
             type: string
             default: "body"
@@ -168,11 +169,10 @@ spec:
     properties:
       url:
         type: string
-        description: "The URL to send the request to."
+        description: "The URL to send the request to. Optional when the Engram configures defaultURL."
       method:
         type: string
-        description: "The HTTP method to use (GET, POST, etc.)."
-        default: "GET"
+        description: "The HTTP method to use (GET, POST, etc.). Defaults to the Engram's defaultMethod config, or GET if unset."
       headers:
         type: object
         description: "A map of HTTP headers to send with the request."
@@ -181,8 +181,6 @@ spec:
       body:
         type: string
         description: "The request body (for POST, PUT, etc.)."
-    required:
-      - url
   outputSchema:
     type: object
     properties:
@@ -196,10 +194,23 @@ spec:
         type: object
         description: "A map of the response headers."
       body:
-        type: string
-        description: "The response body."
+        oneOf:
+          - type: string
+          - type: object
+            properties:
+              encoding:
+                type: string
+              data:
+                type: string
+              sizeBytes:
+                type: integer
+              contentType:
+                type: string
+        description: "The response body. In response.format=file this field is an object with base64 payload metadata."
   execution:
-    job:
-      recommendedRestartPolicy: "Never"
-    deployment: {}
-    statefulset: {}
+    service:
+      ports:
+        - name: grpc
+          protocol: TCP
+          port: 9000
+          targetPort: 9000

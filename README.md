@@ -1,105 +1,167 @@
-# HTTP Request Engram
+# 🌐 HTTP Request Engram
 
-Version: `0.1.0`
+The HTTP Request Engram is a dual-mode component for bobrapet Stories. It turns declarative workflow specs into robust HTTP clients that can run once as a batch Job or continuously as a streaming Deployment. Use it to call REST APIs, webhooks, or internal services without wiring clients by hand.
 
-A powerful and flexible Engram for making HTTP requests. This Engram is designed to be a general-purpose tool for interacting with any REST API, webhook, or web service. It supports dual-mode execution for both single-shot jobs and long-running streaming services.
+## 🌟 Highlights
 
-## Features
+- **Dual execution modes** – Ships the same implementation as a batch step (`job`) or a streaming service (`deployment`/`statefulset`) with automatic backpressure.
+- **Rich configuration surface** – Auth, pagination, redirects, proxy support, per-field defaults, and response shaping are all driven by Engram `spec.with`.
+- **Graceful error handling** – Toggle `neverError` to surface non-2xx responses without failing the step; streaming workers respect context cancellation and propagate structured errors.
+- **Pagination toolkit** – Follow `nextUrl`, increment page/offset params, or chase cursors discovered in the response.
+- **Observability-ready** – Execution uses the SDK logger/tracer, and responses surface status codes, headers, and optional error metadata for downstream metrics.
 
-This Engram has been engineered to provide a comprehensive set of features for robust and reliable HTTP communication in a variety of scenarios.
+## 🚀 Quick Start
 
-### Core Features
-- **Dual Mode:** Can be run as a `job` for single requests or as a `deployment`/`statefulset` for a persistent streaming service.
-- **Flexible Authentication:**
-  - **Bearer Token:** Provide a `bearer_token` via a secret.
-  - **Basic Auth:** Provide `basic_username` and `basic_password` via a secret.
-  - **Custom Header:** Provide a `custom_header_value` via a secret to be sent in a configured header.
-- **Dynamic Inputs:** All core request parameters (`url`, `method`, `headers`, `body`, `params`) can be provided dynamically at runtime.
+```bash
+# Run linting and basic tests
+make lint
+go test ./...
 
-### Advanced Control
-- **Response Handling:**
-  - Conditionally include/exclude response headers and status code.
-  - Control response body format (`auto-detect`, `json`, `text`).
-- **Error Handling:** A `neverError` mode allows the engram to succeed even on non-2xx status codes, returning the error details in the output.
-- **Timeouts:** Configure a timeout for each request.
-- **Redirects:** Enable or disable following redirects and set a maximum number of redirects to follow. The engram intelligently forwards authentication headers on cross-domain redirects.
-- **SSL Verification:** Option to ignore SSL certificate validation issues.
-- **Proxy Support:** Route requests through an HTTP proxy, with support for proxy authentication via secrets.
-- **Query Parameter Formatting:** Control how arrays are formatted in query strings (`noBrackets`, `brackets`, `indices`) for compatibility with various web frameworks.
+# Build a container image (defaults to ghcr.io/bubustack/http-request-engram:dev)
+make docker-build
+```
 
-### Job Mode Features
-- **Pagination:** Automatically handle paginated APIs to fetch a complete dataset.
-  - **`nextUrl` mode:** Follows a URL for the next page found in the response body.
-  - **`updateParam` mode:** Automatically increments a page/offset parameter or uses a cursor from the response body for subsequent requests.
+Drop the rendered container into a `Story` step by referencing the EngramTemplate and populating the `with` block using the configuration tables below.
 
-### Streaming Mode Features
-- **Batching & Rate Limiting:** When in streaming mode, you can configure the number of concurrent requests (`itemsPerBatch`) and the delay between batches (`batchInterval`) to control the load on the downstream service.
+## ⚙️ Configuration (`Engram.spec.with`)
 
-## Configuration (`configSchema`)
+### Core Settings
 
-This section details the static, instance-level configuration that can be provided when deploying an `Engram` resource from this template.
+| Field | Type | Description | Default |
+| --- | --- | --- | --- |
+| `defaultURL` | `string` | Fallback URL if runtime inputs omit `url`. | `""` |
+| `defaultMethod` | `string` | HTTP method when inputs omit `method`. | `"GET"` |
+| `defaultHeaders` | `map[string]string` | Baseline headers merged with per-request headers. | `{}` |
+| `timeout` | `string` | Client timeout (Go duration). | `"10s"` |
+| `neverError` | `bool` | When true, non-2xx responses emit an `error` payload but do not fail the step. | `false` |
+| `ignoreSSLIssues` | `bool` | Skip TLS verification. Use with caution. | `false` |
+| `proxy` | `string` | Proxy URL, e.g. `http://user:pass@host:port`. | `""` |
 
-| Parameter | Type | Description |
-|---|---|---|
-| `defaultUrl` | `string` | A fallback URL to use if one is not provided in the runtime `inputs`. |
-| `defaultMethod` | `string` | A fallback HTTP method to use. Defaults to `GET`. |
-| `defaultHeaders` | `map[string]string` | A map of headers to apply to every request. Runtime headers will be merged on top. |
-| `auth` | `object` | Configures the authentication strategy for the instance. |
-| `auth.type` | `string` | The auth type to use. One of `bearer`, `basic`, `customHeader`. |
-| `auth.headerName` | `string` | The header name to use when `auth.type` is `customHeader`. |
-| `proxy` | `string` | The URL of an HTTP proxy to use. |
-| `batching` | `object` | **Streaming Mode Only.** Configures request batching. |
-| `batching.itemsPerBatch` | `integer` | Max number of concurrent requests. |
-| `batching.batchInterval`| `string` | Delay between batches (e.g., "1s"). |
-| `pagination` | `object` | **Job Mode Only.** Configures automatic pagination. |
-| `pagination.mode` | `string` | The strategy to use. One of `off`, `nextUrl`, `updateParam`. |
-| `pagination.resultsPath` | `string` | A JSONPath expression to find the results array in the response. |
-| `pagination.maxPages` | `integer` | A safeguard to limit the number of pages fetched. |
-| `...` | `...` | See `Engram.yaml` for full details on `nextUrl` and `updateParam` configuration. |
-| `queryParams` | `object` | Configures query parameter formatting. |
-| `queryParams.arrayFormat`| `string` | How to format arrays. One of `noBrackets`, `brackets`, `indices`. |
-| `response` | `object` | Configures the output structure. |
-| `response.includeHeaders`| `boolean`| If `true`, includes response headers in the output. |
-| `response.includeStatus`| `boolean`| If `true`, includes status code/text in the output. |
-| `response.format`| `string` | The desired format of the response body. One of `auto`, `json`, `text`, `file`. |
-| `neverError` | `boolean` | If `true`, the engram will not fail on non-2xx status codes. |
-| `timeout` | `string` | The timeout for the request (e.g., "10s"). |
-| `redirects` | `object` | Configures redirect behavior. |
-| `redirects.follow`| `boolean`| If `true`, the client will follow redirects. |
-| `redirects.maxRedirects`| `integer`| The maximum number of redirects to follow. |
-| `ignoreSslIssues` | `boolean` | If `true`, SSL certificate validation is skipped. |
+### Redirect Handling
 
-## Secrets (`secretSchema`)
+| Field | Type | Description | Default |
+| --- | --- | --- | --- |
+| `redirects.follow` | `bool` | Whether to follow HTTP redirects automatically. | `true` |
+| `redirects.maxRedirects` | `int` | Maximum number of redirects to follow before aborting the request. | `10` |
 
-This engram can be configured with the following secrets:
+### Authentication
 
-| Name | Expected Keys | Description |
-|---|---|---|
-| `bearerToken` | `bearer_token` | For `bearer` authentication. |
-| `basicAuth` | `basic_username`, `basic_password` | For `basic` authentication. |
-| `customHeader`| `custom_header_value` | For `customHeader` authentication. |
-| `proxyAuth` | `proxy_username`, `proxy_password` | For an authenticating proxy. |
+| Field | Type | Description |
+| --- | --- | --- |
+| `auth.type` | `string` | One of `bearer`, `basic`, `customHeader`. |
+| `auth.headerName` | `string` | Required when `auth.type == "customHeader"`. Used as the header name populated from secrets. |
 
-## Inputs (`inputSchema`)
+### Pagination (`job` mode)
 
-This section details the dynamic inputs that can be provided for each execution.
+| Field | Type | Description | Default |
+| --- | --- | --- | --- |
+| `pagination.mode` | `string` | Strategy: `off`, `nextUrl`, or `updateParam`. | `"off"` |
+| `pagination.resultsPath` | `string` | JSONPath to the array of results. | `""` |
+| `pagination.maxPages` | `int` | Hard stop on page count. | `100` |
+| `pagination.nextURLPath` | `string` | JSONPath to the next page URL when using `nextUrl`. For safety, resolved URLs must stay on the same origin (scheme + host) as the current page URL. | `""` |
+| `pagination.updateParam` | `object` | Settings when mutating a query param each page. See Engram.yaml for full schema (`name`, `type`, `initialValue`, `increment`, `cursorPath`). |
 
-| Parameter | Type | Description |
-|---|---|---|
-| `url` | `string` | **Required.** The URL to send the request to. |
-| `method` | `string` | The HTTP method. Defaults to the engram's `defaultMethod` or `GET`. |
-| `params` | `map[string]interface{}` | A map of query parameters to add to the URL. |
-| `headers` | `map[string]interface{}` | A map of headers to send with the request. |
-| `body` | `string` | The request body. |
+### Query Parameters
 
-## Outputs (`outputSchema`)
+| Field | Type | Description | Default |
+| --- | --- | --- | --- |
+| `queryParams.arrayFormat` | `string` | How to encode array params: `noBrackets`, `brackets`, or `indices`. | `"noBrackets"` |
 
-The engram will produce an output with the following structure:
+### Response Formatting
 
-| Parameter | Type | Description |
-|---|---|---|
-| `statusCode` | `integer` | The HTTP status code of the response. (Optional via `response.includeStatus`) |
-| `status` | `string` | The HTTP status text of the response. (Optional via `response.includeStatus`) |
-| `headers` | `object` | A map of the response headers. (Optional via `response.includeHeaders`) |
-| `body` | `any` | The response body, formatted according to `response.format`. |
-| `error` | `string` | If `neverError` is true and an error occurs, this field will contain the error message. |
+| Field | Type | Description | Default |
+| --- | --- | --- | --- |
+| `response.includeHeaders` | `bool` | Include response headers in output. | `true` |
+| `response.includeStatus` | `bool` | Include status code/text in output. | `true` |
+| `response.format` | `string` | `auto`, `json`, `text`, or `file`. `file` returns a structured blob map with base64 payload (`encoding`, `data`, `sizeBytes`, and optional `contentType`). | `"auto"` |
+| `response.outputFieldName` | `string` | Field used to store the response body. | `"body"` |
+
+### Streaming Batching
+
+| Field | Type | Description | Default |
+| --- | --- | --- | --- |
+| `batching.itemsPerBatch` | `int` | Concurrent requests before pausing. | `50` |
+| `batching.batchInterval` | `string` | Sleep duration between batches. | `"1s"` |
+
+## 🔐 Secrets
+
+| Purpose | Expected Keys | Notes |
+| --- | --- | --- |
+| Bearer auth | `bearer_token` | Injects `Authorization: Bearer …` unless already present. |
+| Basic auth | `basic_username`, `basic_password` | Injects an RFC 7617 header. |
+| Custom header | `custom_header_value` | Writes to `auth.headerName` unless request already set it. |
+| Proxy credentials | `proxy_username`, `proxy_password` | Optional when proxy URL omits credentials. |
+
+## 📥 Inputs
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `url` | `string` | Target URL (overrides `defaultURL`). |
+| `method` | `string` | HTTP method (overrides `defaultMethod`). |
+| `params` | `map[string]any` | Query parameters; arrays obey `queryParams.arrayFormat`. |
+| `headers` | `map[string]any` | Per-request headers merged over defaults. |
+| `body` | `string \| []byte` | Request payload (forwarded as-is). |
+
+## 📤 Outputs
+
+The Engram returns a map containing:
+
+| Field | Description |
+| --- | --- |
+| `statusCode`, `status` | Present when `response.includeStatus` is true. |
+| `headers` | Response headers joined as comma-delimited strings when `response.includeHeaders` is true. |
+| `<outputFieldName>` | Parsed response body. Defaults to `"body"`. In `response.format=file`, this is an object with `encoding`, `data`, `sizeBytes`, and optional `contentType`. |
+| `error` | Only when `neverError` is enabled or body parsing fails; contains `statusCode`, `status`, and/or a `message`. |
+
+## 🔄 Streaming Mode
+
+Streaming consumes `engram.InboundMessage` on input and emits plain
+`engram.StreamMessage` on output.
+
+- `Inputs` carries the decoded request map when the caller already resolved structured inputs.
+- `Payload` is used as a fallback when `Inputs` is empty and the request arrives as JSON.
+- `Metadata` is propagated verbatim to the outbound message for tracing.
+- Call `msg.Done()` after successful handling so the SDK can advance delivery acknowledgement for ordered/replay-capable transports.
+
+The Engram processes messages concurrently (bounded by `itemsPerBatch`), honors `ctx.Done()` for shutdown, and reuses the same response shaping as batch mode.
+
+Structured JSON streaming responses keep their canonical JSON in `Payload` and
+mirror the same bytes into `Binary` with `MimeType: application/json`. Raw
+`Binary` without `Payload` is reserved for opaque media or non-JSON blobs.
+
+## 🧪 Local Development
+
+- `make lint` – Run golangci-lint with the shared BubuStack config.
+- `go test ./...` – Build/tests (no fixtures required).
+- `make docker-build` – Build a container image for local clusters.
+
+## 🧭 Observability & Error Handling
+
+- Standard logging flows through the SDK logger available via `ExecutionContext`.
+- Enable `neverError` to capture non-2xx responses for inspection without failing the Story step.
+- When pagination is active, warnings provide JSONPath and state hints to simplify debugging.
+
+## 🤝 Community & Support
+
+- [Contributing](./CONTRIBUTING.md)
+- [Support](./SUPPORT.md)
+- [Security Policy](./SECURITY.md)
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
+- [Discord](https://discord.gg/dysrB7D8H6)
+
+
+## 📄 License
+
+Copyright 2025 BubuStack.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
